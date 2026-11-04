@@ -15,7 +15,7 @@ void recibirComando(String linea) {
   valor.trim();
   comando.toUpperCase();
   if (comando == "PING") enviarMensaje("PONG");
-  else enviarMensaje("ERROR=UKNOWN_COMMAND," + comando);
+  else enviarMensaje("ERROR=COMANDO_DESCONOCIDO," + comando);
 }
 void leerComandoSerial() {
   while (Serial.available()) {
@@ -33,7 +33,7 @@ void leerComandoSerial() {
 void setup() {
   Serial.begin(VELOCIDAD_SERIAL);
   lineaComando.reserve(512);
-  enviarMensaje("READY=ESP32_DOMOTICA_V1");
+  enviarMensaje("LISTO=ESP32_DOMOTICA_V1");
 }
 void loop() {
   leerComandoSerial();
