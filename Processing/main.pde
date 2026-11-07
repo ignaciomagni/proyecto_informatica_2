@@ -6,6 +6,8 @@ String estadoActual = "Conectando ESP...";
 ArrayList <String> eventos;
 int scroll= 0;
 int c =0;
+String sensorEstado = "Temperatura -- C Humedad: -- %";
+boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
 String puertaEstado = "DESCONOCIDA"; 
 boolean cerraduraEstado = false;
@@ -54,7 +56,11 @@ void draw() {
     dibujarBoton(width*0.6, height*0.65, width*0.1, "Cerrar",!cerraduraEstado);
     
     text("Puerta: " + puertaEstado, width*0.7, height*0.75);
-
+  
+  dibujarPanel(width*0.2, height*0.65, width * 0.35, height*0.3, "SENSOR AMBIENTAL");
+  text(sensorEstado, width * 0.2, height * 0.58);
+  if(!mousePressed){actualizarEstado=false;}
+  dibujarBoton(width*0.2, height*0.69, width * 0.17, "Actualizar estado", actualizarEstado);
 }
 
 
@@ -121,6 +127,10 @@ void mousePressed(){
     enviarComando("ABRIR");
     cerraduraEstado = true;
   }
+  if(dist(width*0.2,height*0.69,mouseX,mouseY)<width*0.085){
+    enviarComando("ESTADO");
+    actualizarEstado=true;
+  }
 }
 
 void serialEvent(Serial puerto){
@@ -134,6 +144,22 @@ void serialEvent(Serial puerto){
   if(mensaje.startsWith("LISTO=")){
     estadoActual = "ESSP32 conectado";
     enviarComando("ESTADO");
+  }else if(mensaje.startsWith("AMB=")){
+    String info = mensaje.substring(4);
+    float t = Float.NaN;
+    float h= Float.NaN;
+    String[] lecturas = split(info, ',');
+    for(String lectura : lecturas){
+     if(lectura.startsWith("T:")){
+      t=parseFloat(lectura.substring(2));
+     }
+     if(lectura.startsWith("H:")){
+      h=parseFloat(lectura.substring(2)); 
+     }
+    }
+    if(!Float.isNaN(t) && !Float.isNaN(h)){
+      sensorEstado="Temperatura: "+ nf(t, 0, 1) + "C  Humedad: " + nf(h,0,1) + " %";
+    }
   }else if(mensaje.startsWith("PUERTA=")){
       if(mensaje.substring(7).equals("ABIERTA")){
        puertaEstado = "ABIERTA";
@@ -141,7 +167,7 @@ void serialEvent(Serial puerto){
         puertaEstado = "CERRADA";
       }
       nuevoEvento("Puerta " + puertaEstado.toLowerCase());
-  } else if(mensaje.startsWith("CERRADURA=ABIERA,RAZON=")){
+  } else if(mensaje.startsWith("CERRADURA=ABIERTA,RAZON=")){
     nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("RAZON=")+7));
   }else if (mensaje.startsWith("CERRADURA=")){
     cerraduraEstado = mensaje.contains("ABIERTA");
@@ -156,11 +182,14 @@ void serialEvent(Serial puerto){
          if(boton>=0 && boton<3){
             if(orden.equals("ENCENDIDA")){
              lucesEstado[boton] = true; 
-            }else{
+            }else if(orden.equals("APAGADA")){
                lucesEstado[boton] = false; 
             }
          }
      }
+  }else if(mensaje.startsWith("ERROR_DE_SENSOR")){
+    estadoActual = "Error leyendo DHT";
+    nuevoEvento(estadoActual);
   }else if (mensaje.startsWith("BOTON=")){
     nuevoEvento("Boton interior pulsado");
   }
