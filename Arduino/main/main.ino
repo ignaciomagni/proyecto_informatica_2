@@ -59,6 +59,7 @@ void recibirComando(String linea) {
   else if (comando == "ABRIR") desbloquearPuerta("APP");
   else if (comando == "CERRAR") bloquearPuerta();
   else if (comando == "ESTADO") {
+    enviarMensaje("PUERTA=" + String(estadoPuerta == LOW ? "ABIERTA" : "CERRADA"));
     enviarMensaje("CERRADURA=" + String(cerraduraAbierta ? "ABIERTA" : "CERRADA"));
     for (int i = 0; i < 3; i++) {
       enviarMensaje("LUZ" + String(i+1) + "=" + (luces[i] ? "ENCENDIDA" : "APAGADA"));
