@@ -114,11 +114,11 @@ void mousePressed(){
   }
   
   if(dist(width*0.6, height*0.65, mouseX, mouseY)<width*0.05){
-    enviarComando("ABRIR");
+    enviarComando("CERRAR");
     cerraduraEstado = false;
   }
   if(dist(width*0.8, height*0.65, mouseX, mouseY)<width*0.05){
-    enviarComando("CERRAR");
+    enviarComando("ABRIR");
     cerraduraEstado = true;
   }
 }
@@ -141,10 +141,10 @@ void serialEvent(Serial puerto){
         puertaEstado = "CERRADA";
       }
       nuevoEvento("Puerta " + puertaEstado.toLowerCase());
-  } else if(mensaje.startsWith("CERRADURA=ABIERTA,RAZON=")){
-    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("REASON=")+7));
+  } else if(mensaje.startsWith("CERRADURA=ABIERA,RAZON=")){
+    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("RAZON=")+7));
   }else if (mensaje.startsWith("CERRADURA=")){
-    cerraduraEstado = mensaje.contains("CERRADA");
+    cerraduraEstado = mensaje.contains("ABIERTA");
   }else if(mensaje.startsWith("ERROR=")){
     estadoActual = mensaje;
     nuevoEvento(mensaje);
@@ -154,13 +154,15 @@ void serialEvent(Serial puerto){
          int boton = parseInt(mensaje.substring(3, igual))-1;
          String orden = mensaje.substring(igual+1);
          if(boton>=0 && boton<3){
-            if(orden.equals("ON")){
+            if(orden.equals("ENCENDIDA")){
              lucesEstado[boton] = true; 
             }else{
                lucesEstado[boton] = false; 
             }
          }
      }
+  }else if (mensaje.startsWith("BOTON=")){
+    nuevoEvento("Boton interior pulsado");
   }
 }
 
