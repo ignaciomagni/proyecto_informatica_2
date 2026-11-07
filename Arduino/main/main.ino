@@ -1,3 +1,4 @@
+#include <DHT.h>
 #include <ESP32Servo.h>
 
 const uint8_t PIN_LUZ_1 = 15;
@@ -6,18 +7,22 @@ const uint8_t PIN_LUZ_3 = 17;
 const uint8_t PIN_PUERTA = 14;
 const uint8_t PIN_SERVO = 2;
 const uint8_t PIN_BOTON_INTERIOR = 12;
+const uint8_t PIN_DHT = 4;
 
 const uint32_t VELOCIDAD_SERIAL = 115200;
+const uint32_t INTERVALO_DHT_MS = 2500;
 const uint32_t DEBOUNCE_MS = 40;
 const uint32_t DURACION_DESBLOQUEO_MS = 3500;
 const int ANGULO_CIERRE_SERVO = 0;
 const int ANGULO_ABIERTO_SERVO = 90;
 
+DHT dht(PIN_DHT, DHT22);
 Servo cerradura;
 
 bool luces[3] = {false, false, false};
 bool cerraduraAbierta = false;
 uint32_t desbloqueoEmpezo = 0;
+uint32_t ultimoDht = 0;
 uint32_t ultimaPuerta = 0;
 uint32_t ultimoBoton = 0;
 bool ultimaLecturaBoton = HIGH;
@@ -107,6 +112,18 @@ void logicaSensorPuerta() {
   }
   ultimoEstadoPuerta = lectura;
 }
+void logicaDHT() {
+  uint32_t ahora = millis();
+  if (ahora - ultimoDht < INTERVALO_DHT_MS) return;
+  ultimoDht = ahora;
+  float humedad = dht.readHumidity();
+  float temperatura = dht.readTemperature();
+  if (isnan(humedad) || isnan(temperatura)) {
+    enviarMensaje("ERROR_DE_SENSOR=DHT22");
+    return;
+  }
+  enviarMensaje("AMB=T:" + String(temperatura, 1) + ",H:" + String(humedad, 1));
+}
 void setup() {
   Serial.begin(VELOCIDAD_SERIAL);
   lineaComando.reserve(512);
@@ -121,12 +138,14 @@ void setup() {
   cerradura.setPeriodHertz(50);
   cerradura.attach(PIN_SERVO, 500, 2400);
   cerradura.write(ANGULO_CIERRE_SERVO);
+  dht.begin();
   enviarMensaje("LISTO=ESP32_DOMOTICA_V1");
 }
 void loop() {
   leerComandoSerial();
   logicaBoton();
   logicaSensorPuerta();
+  logicaDHT();
   if (cerraduraAbierta && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
     bloquearPuerta();
   }
