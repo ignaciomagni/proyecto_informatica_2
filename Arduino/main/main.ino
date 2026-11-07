@@ -5,6 +5,7 @@ const uint8_t PIN_LUZ_2 = 16;
 const uint8_t PIN_LUZ_3 = 17;
 const uint8_t PIN_PUERTA = 14;
 const uint8_t PIN_SERVO = 2;
+const uint8_t PIN_BOTON_INTERIOR = 12;
 
 const uint32_t VELOCIDAD_SERIAL = 115200;
 const uint32_t DEBOUNCE_MS = 40;
@@ -18,6 +19,9 @@ bool luces[3] = {false, false, false};
 bool cerraduraAbierta = false;
 uint32_t desbloqueoEmpezo = 0;
 uint32_t ultimaPuerta = 0;
+uint32_t ultimoBoton = 0;
+bool ultimaLecturaBoton = HIGH;
+bool estadoBoton = HIGH;
 bool ultimoEstadoPuerta = HIGH;
 bool estadoPuerta = HIGH;
 String lineaComando;
@@ -79,6 +83,19 @@ void leerComandoSerial() {
     }
   }
 }
+void logicaBoton() {
+  bool lectura = digitalRead(PIN_BOTON_INTERIOR);
+  uint32_t ahora = millis();
+  if (lectura != ultimaLecturaBoton) ultimoBoton = ahora;
+  if ((ahora - ultimoBoton) > DEBOUNCE_MS && lectura != estadoBoton) {
+    estadoBoton = lectura;
+    if (estadoBoton == LOW) {
+      enviarMensaje("BOTON=INTERIOR");
+      desbloquearPuerta("BOTON_INTERIOR");
+    }
+  }
+  ultimaLecturaBoton = lectura;
+}
 void logicaSensorPuerta() {
   bool lectura = digitalRead(PIN_PUERTA);
   uint32_t ahora = millis();
@@ -97,6 +114,7 @@ void setup() {
   pinMode(PIN_LUZ_2, OUTPUT);
   pinMode(PIN_LUZ_3, OUTPUT);
   pinMode(PIN_PUERTA, INPUT_PULLUP);
+  pinMode(PIN_BOTON_INTERIOR, INPUT_PULLUP);
   digitalWrite(PIN_LUZ_1, LOW);
   digitalWrite(PIN_LUZ_2, LOW);
   digitalWrite(PIN_LUZ_3, LOW);
@@ -107,6 +125,7 @@ void setup() {
 }
 void loop() {
   leerComandoSerial();
+  logicaBoton();
   logicaSensorPuerta();
   if (cerraduraAbierta && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
     bloquearPuerta();
