@@ -1,20 +1,25 @@
 #include <ESP32Servo.h>
 
-constexpr uint8_t PIN_LUZ_1 = 15;
-constexpr uint8_t PIN_LUZ_2 = 16;
-constexpr uint8_t PIN_LUZ_3 = 17;
-constexpr uint8_t PIN_SERVO = 2;
+const uint8_t PIN_LUZ_1 = 15;
+const uint8_t PIN_LUZ_2 = 16;
+const uint8_t PIN_LUZ_3 = 17;
+const uint8_t PIN_PUERTA = 14;
+const uint8_t PIN_SERVO = 2;
 
-constexpr uint32_t VELOCIDAD_SERIAL = 115200;
-constexpr uint32_t DURACION_DESBLOQUEO_MS = 3500;
-constexpr int ANGULO_CIERRE_SERVO = 0;
-constexpr int ANGULO_ABIERTO_SERVO = 90;
+const uint32_t VELOCIDAD_SERIAL = 115200;
+const uint32_t DEBOUNCE_MS = 40;
+const uint32_t DURACION_DESBLOQUEO_MS = 3500;
+const int ANGULO_CIERRE_SERVO = 0;
+const int ANGULO_ABIERTO_SERVO = 90;
 
 Servo cerradura;
 
 bool luces[3] = {false, false, false};
 bool cerraduraAbierta = false;
 uint32_t desbloqueoEmpezo = 0;
+uint32_t ultimaPuerta = 0;
+bool ultimoEstadoPuerta = HIGH;
+bool estadoPuerta = HIGH;
 String lineaComando;
 
 void enviarMensaje(const String &mensaje) {
@@ -73,12 +78,24 @@ void leerComandoSerial() {
     }
   }
 }
+void logicaSensorPuerta() {
+  bool lectura = digitalRead(PIN_PUERTA);
+  uint32_t ahora = millis();
+  if (lectura != ultimoEstadoPuerta) ultimaPuerta = ahora;
+  if ((ahora - ultimaPuerta) > DEBOUNCE_MS && lectura != estadoPuerta) {
+    estadoPuerta = lectura;
+    bool estaAbierta = estadoPuerta == LOW;
+    enviarMensaje(String("PUERTA=") + (estaAbierta ? "ABIERTA" : "CERRADA"));
+  }
+  ultimoEstadoPuerta = lectura;
+}
 void setup() {
   Serial.begin(VELOCIDAD_SERIAL);
   lineaComando.reserve(512);
   pinMode(PIN_LUZ_1, OUTPUT);
   pinMode(PIN_LUZ_2, OUTPUT);
   pinMode(PIN_LUZ_3, OUTPUT);
+  pinMode(PIN_PUERTA, INPUT_PULLUP);
   digitalWrite(PIN_LUZ_1, LOW);
   digitalWrite(PIN_LUZ_2, LOW);
   digitalWrite(PIN_LUZ_3, LOW);
@@ -89,6 +106,7 @@ void setup() {
 }
 void loop() {
   leerComandoSerial();
+  logicaSensorPuerta();
   if (cerraduraAbierta && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
     bloquearPuerta();
   }
