@@ -7,6 +7,8 @@ ArrayList <String> eventos;
 int scroll= 0;
 int c =0;
 boolean[] lucesEstado ={false, false, false};
+boolean cerraduraEstado = false;
+
 void setup(){
   
   size(600,600);
@@ -45,6 +47,10 @@ void draw() {
   for(int i=0; i<3; i++){
     dibujarBoton(width*(0.70-(i-1)*0.16), height*0.3, width*0.1, "Led "+(-i-1+3), lucesEstado[i]);
   }
+  
+    dibujarPanel(width*0.70, height*0.65, width*0.5, height*0.3, "Control de cerradura");
+    dibujarBoton(width*0.8, height*0.65, width*0.1, "Abrir",cerraduraEstado);
+    dibujarBoton(width*0.6, height*0.65, width*0.1, "Cerrar",!cerraduraEstado);
 }
 
 
@@ -102,6 +108,15 @@ void mousePressed(){
      break;
    }
   }
+  
+  if(dist(width*0.6, height*0.65, mouseX, mouseY)<width*0.05){
+    enviarComando("ABRIR");
+    cerraduraEstado = false;
+  }
+  if(dist(width*0.8, height*0.65, mouseX, mouseY)<width*0.05){
+    enviarComando("CERRAR");
+    cerraduraEstado = true;
+  }
 }
 
 void serialEvent(Serial puerto){
@@ -114,7 +129,12 @@ void serialEvent(Serial puerto){
   }
   if(mensaje.startsWith("LISTO=")){
     estadoActual = "ESSP32 conectado";
-  } else if(mensaje.startsWith("ERROR=")){
+    enviarComando("ESTADO");
+  }else if(mensaje.startsWith("CERRADURA=ABIERTA,RAZON=")){
+    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("RAZON=")+7));
+  }else if (mensaje.startsWith("CERRADURA=")){
+    cerraduraEstado = mensaje.contains("ABIERTA");
+  }else if(mensaje.startsWith("ERROR=")){
     estadoActual = mensaje;
     nuevoEvento(mensaje);
   }else if(mensaje.startsWith("LUZ")){
@@ -125,7 +145,7 @@ void serialEvent(Serial puerto){
          if(boton>=0 && boton<3){
             if(orden.equals("ENCENDIDA")){
              lucesEstado[boton] = true; 
-            }else{
+            }else if(orden.equals("APAGADA")){
                lucesEstado[boton] = false; 
             }
          }
