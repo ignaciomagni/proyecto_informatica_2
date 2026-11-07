@@ -7,6 +7,7 @@ ArrayList <String> eventos;
 int scroll= 0;
 int c =0;
 boolean[] lucesEstado ={false, false, false};
+String puertaEstado = "DESCONOCIDA"; 
 boolean cerraduraEstado = false;
 
 void setup(){
@@ -51,6 +52,9 @@ void draw() {
     dibujarPanel(width*0.70, height*0.65, width*0.5, height*0.3, "Control de cerradura");
     dibujarBoton(width*0.8, height*0.65, width*0.1, "Abrir",cerraduraEstado);
     dibujarBoton(width*0.6, height*0.65, width*0.1, "Cerrar",!cerraduraEstado);
+    
+    text("Puerta: " + puertaEstado, width*0.7, height*0.75);
+
 }
 
 
@@ -82,7 +86,7 @@ void dibujarBoton(float x, float y, float diametro, String informacion, boolean 
  textSize(13);
  text(informacion, x+4, y+4);
  }
- 
+ fill(255,255,255);
 }
 
 void mouseWheel(processing.event.MouseEvent event){
@@ -130,10 +134,17 @@ void serialEvent(Serial puerto){
   if(mensaje.startsWith("LISTO=")){
     estadoActual = "ESSP32 conectado";
     enviarComando("ESTADO");
-  }else if(mensaje.startsWith("CERRADURA=ABIERTA,RAZON=")){
-    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("RAZON=")+7));
+  }else if(mensaje.startsWith("PUERTA=")){
+      if(mensaje.substring(7).equals("ABIERTA")){
+       puertaEstado = "ABIERTA";
+      }else{
+        puertaEstado = "CERRADA";
+      }
+      nuevoEvento("Puerta " + puertaEstado.toLowerCase());
+  } else if(mensaje.startsWith("CERRADURA=ABIERTA,RAZON=")){
+    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("REASON=")+7));
   }else if (mensaje.startsWith("CERRADURA=")){
-    cerraduraEstado = mensaje.contains("ABIERTA");
+    cerraduraEstado = mensaje.contains("CERRADA");
   }else if(mensaje.startsWith("ERROR=")){
     estadoActual = mensaje;
     nuevoEvento(mensaje);
@@ -143,9 +154,9 @@ void serialEvent(Serial puerto){
          int boton = parseInt(mensaje.substring(3, igual))-1;
          String orden = mensaje.substring(igual+1);
          if(boton>=0 && boton<3){
-            if(orden.equals("ENCENDIDA")){
+            if(orden.equals("ON")){
              lucesEstado[boton] = true; 
-            }else if(orden.equals("APAGADA")){
+            }else{
                lucesEstado[boton] = false; 
             }
          }
