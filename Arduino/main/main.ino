@@ -31,6 +31,9 @@ Servo cerradura;
 
 bool luces[3] = {false, false, false};
 bool cerraduraAbierta = false;
+bool usuariosConocidos = false;
+String uidsAutorizadas[100];
+size_t cantidadAutorizadas = 0;
 uint32_t desbloqueoEmpezo = 0;
 uint32_t ultimoDht = 0;
 uint32_t ultimoRfid = 0;
@@ -53,6 +56,14 @@ void cambiarEstadoLeds(bool verde, bool amarillo, bool rojo) {
 void beep(uint16_t frecuencia, uint16_t duracion) {
   tone(PIN_BUZZER, frecuencia, duracion);
 }
+String normalizarUID(String uid) {
+  uid.trim();
+  uid.toUpperCase();
+  uid.replace(" ", "");
+  uid.replace(":", "");
+  uid.replace("-", "");
+  return uid;
+}
 void bloquearPuerta() {
   cerradura.write(ANGULO_CIERRE_SERVO);
   cerraduraAbierta = false;
@@ -65,6 +76,37 @@ void desbloquearPuerta(const String &razon) {
   cambiarEstadoLeds(true, false, false);
   beep(1800, 100);
   enviarMensaje("CERRADURA=ABIERTA,RAZON=" + razon);
+}
+bool estaAutorizada(const String &uid) {
+  for (size_t i = 0; i < cantidadAutorizadas; ++i) {
+    if (uidsAutorizadas[i] == uid) return true;
+  }
+  return false;
+}
+void agregarUidAutorizada(String uid) {
+  uid = normalizarUID(uid);
+  if (uid.length() == 0) return;
+  for (size_t i = 0; i < cantidadAutorizadas; ++i) {
+    if (uidsAutorizadas[i] == uid) return;
+  }
+  if (cantidadAutorizadas < 100) uidsAutorizadas[cantidadAutorizadas++] = uid;
+}
+void reemplazarUsuarios(String csv) {
+  cantidadAutorizadas = 0;
+  csv.trim();
+  if (csv.length() > 0) {
+    int inicio = 0;
+    while (inicio < csv.length()) {
+      int coma = csv.indexOf(',', inicio);
+      String item = (coma < 0) ? csv.substring(inicio) : csv.substring(inicio, coma);
+      item = normalizarUID(item);
+      if (item.length() > 0) agregarUidAutorizada(item);
+      if (coma < 0) break;
+      inicio = coma + 1;
+    }
+  }
+  usuariosConocidos = true;
+  enviarMensaje("USUARIOS_SINCRONIZADOS=" + String(cantidadAutorizadas));
 }
 void cambiarLuz(uint8_t index, bool estado) {
   if (index > 2) return;
@@ -83,6 +125,7 @@ void recibirComando(String linea) {
   valor.trim();
   comando.toUpperCase();
   if (comando == "PING") enviarMensaje("PONG");
+  else if (comando == "USUARIOS") reemplazarUsuarios(valor);
   else if (comando == "LUZ1") cambiarLuz(0, valor == "ENCENDIDA" || valor == "1");
   else if (comando == "LUZ2") cambiarLuz(1, valor == "ENCENDIDA" || valor == "1");
   else if (comando == "LUZ3") cambiarLuz(2, valor == "ENCENDIDA" || valor == "1");
@@ -127,6 +170,19 @@ void scanRFID() {
   if (ahora - ultimoRfid < RFID_COOLDOWN_MS) return;
   ultimoRfid = ahora;
   enviarMensaje("TARJETA=" + uid);
+  if (!usuariosConocidos) {
+    cambiarEstadoLeds(false, false, true);
+    beep(500, 250);
+    enviarMensaje("ACCESO=DENEGADO,UID=" + uid + ",RAZON=USUARIOS_NO_SINCRONIZADOS");
+  } else if (estaAutorizada(uid)) {
+    cambiarEstadoLeds(true, false, false);
+    enviarMensaje("ACCESO=CONSEDIDO,UID=" + uid);
+    desbloquearPuerta("RFID");
+  } else {
+    cambiarEstadoLeds(false, false, true);
+    beep(450, 350);
+    enviarMensaje("ACCESO=DENEGADO,UID=" + uid);
+  }
 }
 void logicaBoton() {
   bool lectura = digitalRead(PIN_BOTON_INTERIOR);
