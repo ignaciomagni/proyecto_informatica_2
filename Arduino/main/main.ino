@@ -5,9 +5,13 @@ const uint8_t PIN_LUZ_1 = 15;
 const uint8_t PIN_LUZ_2 = 16;
 const uint8_t PIN_LUZ_3 = 17;
 const uint8_t PIN_PUERTA = 14;
+const uint8_t PIN_LED_VERDE = 32;
+const uint8_t PIN_LED_AMARILLO = 33;
+const uint8_t PIN_LED_ROJO = 25;
 const uint8_t PIN_SERVO = 2;
 const uint8_t PIN_BOTON_INTERIOR = 12;
 const uint8_t PIN_DHT = 4;
+const uint8_t PIN_BUZZER = 13;
 
 const uint32_t VELOCIDAD_SERIAL = 115200;
 const uint32_t INTERVALO_DHT_MS = 2500;
@@ -34,6 +38,14 @@ String lineaComando;
 void enviarMensaje(const String &mensaje) {
   Serial.println(mensaje);
 }
+void cambiarEstadoLeds(bool verde, bool amarillo, bool rojo) {
+  digitalWrite(PIN_LED_VERDE, verde ? HIGH : LOW);
+  digitalWrite(PIN_LED_AMARILLO, amarillo ? HIGH : LOW);
+  digitalWrite(PIN_LED_ROJO, rojo ? HIGH : LOW);
+}
+void beep(uint16_t frecuencia, uint16_t duracion) {
+  tone(PIN_BUZZER, frecuencia, duracion);
+}
 void bloquearPuerta() {
   cerradura.write(ANGULO_CIERRE_SERVO);
   cerraduraAbierta = false;
@@ -43,6 +55,8 @@ void desbloquearPuerta(const String &razon) {
   cerradura.write(ANGULO_ABIERTO_SERVO);
   cerraduraAbierta = true;
   desbloqueoEmpezo = millis();
+  cambiarEstadoLeds(true, false, false);
+  beep(1800, 100);
   enviarMensaje("CERRADURA=ABIERTA,RAZON=" + razon);
 }
 void cambiarLuz(uint8_t index, bool estado) {
@@ -109,6 +123,7 @@ void logicaSensorPuerta() {
     estadoPuerta = lectura;
     bool estaAbierta = estadoPuerta == LOW;
     enviarMensaje(String("PUERTA=") + (estaAbierta ? "ABIERTA" : "CERRADA"));
+    if (estaAbierta) beep(1200, 50);
   }
   ultimoEstadoPuerta = lectura;
 }
@@ -130,11 +145,16 @@ void setup() {
   pinMode(PIN_LUZ_1, OUTPUT);
   pinMode(PIN_LUZ_2, OUTPUT);
   pinMode(PIN_LUZ_3, OUTPUT);
+  pinMode(PIN_LED_VERDE, OUTPUT);
+  pinMode(PIN_LED_AMARILLO, OUTPUT);
+  pinMode(PIN_LED_ROJO, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_PUERTA, INPUT_PULLUP);
   pinMode(PIN_BOTON_INTERIOR, INPUT_PULLUP);
   digitalWrite(PIN_LUZ_1, LOW);
   digitalWrite(PIN_LUZ_2, LOW);
   digitalWrite(PIN_LUZ_3, LOW);
+  cambiarEstadoLeds(false, false, false);
   cerradura.setPeriodHertz(50);
   cerradura.attach(PIN_SERVO, 500, 2400);
   cerradura.write(ANGULO_CIERRE_SERVO);
