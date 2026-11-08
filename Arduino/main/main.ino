@@ -26,7 +26,7 @@ const int ANGULO_CIERRE_SERVO = 0;
 const int ANGULO_ABIERTO_SERVO = 90;
 
 MFRC522 rfid(PIN_RFID_SS, PIN_RFID_RST);
-DHT dht(PIN_DHT, DHT22);
+DHT dht(PIN_DHT, DHT11);
 Servo cerradura;
 
 bool luces[3] = {false, false, false};
