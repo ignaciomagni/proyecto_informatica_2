@@ -10,6 +10,7 @@ String sensorEstado = "Temperatura -- C Humedad: -- %";
 boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
 String puertaEstado = "DESCONOCIDA"; 
+String ultimaTarjeta = "--";
 boolean cerraduraEstado = false;
 
 void setup(){
@@ -40,29 +41,32 @@ void draw() {
   text("Panel de control", width*0.5, height*0.05);
   textSize(16);
   text(estadoActual,  width*0.5, height*0.1);
-  dibujarPanel(width*0.2, height*0.3, width * 0.3, height * 0.3, "Eventos recientes: " );
+  dibujarPanel(width*0.2, height*0.3, width * 0.3, height * 0.35, "Eventos recientes: " );
   for(int i=scroll ; i<7+min(scroll,eventos.size()-scroll);i++){;
     text(eventos.get(i), width*0.2, height*0.3-40+20*(i-scroll)); 
   }
   
-  dibujarPanel(width*0.70, height*0.3, width*0.5, height*0.3, "Control de luces");
+  dibujarPanel(width*0.70, height*0.215, width*0.5, height*0.175, "Control de luces");
   
   for(int i=0; i<3; i++){
-    dibujarBoton(width*(0.70-(i-1)*0.16), height*0.3, width*0.1, "Led "+(-i-1+3), lucesEstado[i]);
+    dibujarBoton(width*(0.70-(i-1)*0.16), height*0.215, width*0.1, "Led "+(-i-1+3), lucesEstado[i]);
   }
   
-    dibujarPanel(width*0.70, height*0.65, width*0.5, height*0.3, "Control de cerradura");
-    dibujarBoton(width*0.8, height*0.65, width*0.1, "Abrir",cerraduraEstado);
-    dibujarBoton(width*0.6, height*0.65, width*0.1, "Cerrar",!cerraduraEstado);
+    dibujarPanel(width*0.70, height*0.7875, width*0.5, height*0.175, "Control de cerradura");
+    dibujarBoton(width*0.8, height*0.7875, width*0.1, "Abrir",cerraduraEstado);
+    dibujarBoton(width*0.6, height*0.7875, width*0.1, "Cerrar",!cerraduraEstado);
     
-    text("Puerta: " + puertaEstado, width*0.7, height*0.75);
+    text("Puerta: " + puertaEstado, width*0.7, height*0.870);
   
-  dibujarPanel(width*0.2, height*0.65, width * 0.35, height*0.3, "SENSOR AMBIENTAL");
-  text(sensorEstado, width * 0.2, height * 0.58);
+  dibujarPanel(width*0.7, height*0.5, width * 0.35, height*0.3, "SENSOR AMBIENTAL");
+  text(sensorEstado, width * 0.7, height * 0.625);
   if(!mousePressed){actualizarEstado=false;}
-  dibujarBoton(width*0.2, height*0.69, width * 0.17, "Actualizar estado", actualizarEstado);
-}
+  dibujarBoton(width*0.7, height*0.5, width * 0.17, "Actualizar estado", actualizarEstado);
 
+
+  dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
+  text("Ultima tarjeta: " + ultimaTarjeta, width*0.2,height*0.7);
+}
 
 
 void dibujarPanel(float x, float y, float ancho, float alto, String informacion){
@@ -108,7 +112,7 @@ void mouseWheel(processing.event.MouseEvent event){
 
 void mousePressed(){
   for(int i = 0; i<3;i++){
-   if(dist(width*(0.70-(i-1)*0.16), height*0.3, mouseX, mouseY)<width*0.05) {
+   if(dist(width*(0.70-(i-1)*0.16), height*0.215, mouseX, mouseY)<width*0.05) {
      lucesEstado[i]=!lucesEstado[i]; 
      if(lucesEstado[i]){
        enviarComando("LUZ"+(i+1)+"="+"ENCENDIDA");
@@ -119,15 +123,15 @@ void mousePressed(){
    }
   }
   
-  if(dist(width*0.6, height*0.65, mouseX, mouseY)<width*0.05){
+  if(dist(width*0.6, height*0.7875, mouseX, mouseY)<width*0.05){
     enviarComando("CERRAR");
     cerraduraEstado = false;
   }
-  if(dist(width*0.8, height*0.65, mouseX, mouseY)<width*0.05){
+  if(dist(width*0.8, height*0.7875, mouseX, mouseY)<width*0.05){
     enviarComando("ABRIR");
     cerraduraEstado = true;
   }
-  if(dist(width*0.2,height*0.69,mouseX,mouseY)<width*0.085){
+  if(dist(width*0.7, height*0.5,mouseX,mouseY)<width*0.085){
     enviarComando("ESTADO");
     actualizarEstado=true;
   }
@@ -187,7 +191,9 @@ void serialEvent(Serial puerto){
             }
          }
      }
-  }else if(mensaje.startsWith("ERROR_DE_SENSOR")){
+  }else if(mensaje.startsWith("TARJETA=")){
+    ultimaTarjeta = procesarTexto(mensaje);
+  }else if(mensaje.startsWith("ERROR_DEL_SENSOR")){
     estadoActual = "Error leyendo DHT";
     nuevoEvento(estadoActual);
   }else if (mensaje.startsWith("BOTON=")){
@@ -202,6 +208,14 @@ void enviarComando(String comando){
  }
  puerto.write(comando + "\n");
  println("Comando enviado: " + comando);
+ }
+ 
+ String procesarTexto(String texto){
+   if(texto == null){
+    return ""; 
+   }
+   texto = trim(texto).toUpperCase().replace(" ","").replace(":", "").replace("-","");
+   return texto;
  }
  
  void nuevoEvento(String evento){
