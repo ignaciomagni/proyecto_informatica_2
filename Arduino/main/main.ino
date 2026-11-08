@@ -21,6 +21,7 @@ const uint32_t VELOCIDAD_SERIAL = 115200;
 const uint32_t INTERVALO_DHT_MS = 2500;
 const uint32_t DEBOUNCE_MS = 40;
 const uint32_t DURACION_DESBLOQUEO_MS = 3500;
+const uint32_t DURACION_REGISTRO_MS = 30000;
 const uint32_t RFID_COOLDOWN_MS = 1200;
 const int ANGULO_CIERRE_SERVO = 0;
 const int ANGULO_ABIERTO_SERVO = 90;
@@ -30,10 +31,12 @@ DHT dht(PIN_DHT, DHT11);
 Servo cerradura;
 
 bool luces[3] = {false, false, false};
+bool modoRegistro = false;
 bool cerraduraAbierta = false;
 bool usuariosConocidos = false;
 String uidsAutorizadas[100];
 size_t cantidadAutorizadas = 0;
+uint32_t registroEmpezo = 0;
 uint32_t desbloqueoEmpezo = 0;
 uint32_t ultimoDht = 0;
 uint32_t ultimoRfid = 0;
@@ -126,7 +129,16 @@ void recibirComando(String linea) {
   comando.toUpperCase();
   if (comando == "PING") enviarMensaje("PONG");
   else if (comando == "USUARIOS") reemplazarUsuarios(valor);
-  else if (comando == "LUZ1") cambiarLuz(0, valor == "ENCENDIDA" || valor == "1");
+  else if (comando == "REGISTRAR") {
+    modoRegistro = true;
+    registroEmpezo = millis();
+    cambiarEstadoLeds(false, true, false);
+    enviarMensaje("REGISTRO=LISTO");
+  } else if (comando == "CANCELAR_REGISTRO") {
+    modoRegistro = false;
+    cambiarEstadoLeds(false, false, false);
+    enviarMensaje("REGISTRO=CANCELADO");
+  } else if (comando == "LUZ1") cambiarLuz(0, valor == "ENCENDIDA" || valor == "1");
   else if (comando == "LUZ2") cambiarLuz(1, valor == "ENCENDIDA" || valor == "1");
   else if (comando == "LUZ3") cambiarLuz(2, valor == "ENCENDIDA" || valor == "1");
   else if (comando == "ABRIR") desbloquearPuerta("APP");
@@ -169,6 +181,13 @@ void scanRFID() {
   rfid.PCD_StopCrypto1();
   if (ahora - ultimoRfid < RFID_COOLDOWN_MS) return;
   ultimoRfid = ahora;
+  if (modoRegistro) {
+    modoRegistro = false;
+    cambiarEstadoLeds(false, false, false);
+    enviarMensaje("UID_REGISTRO=" + uid);
+    beep(1400, 100);
+    return;
+  }
   enviarMensaje("TARJETA=" + uid);
   if (!usuariosConocidos) {
     cambiarEstadoLeds(false, false, true);
@@ -255,5 +274,10 @@ void loop() {
   logicaDHT();
   if (cerraduraAbierta && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
     bloquearPuerta();
+  }
+  if (modoRegistro && millis() - registroEmpezo >= DURACION_REGISTRO_MS) {
+    modoRegistro = false;
+    cambiarEstadoLeds(false, false, false);
+    enviarMensaje("REGISTRO=TIEMPO_TERMINADO");
   }
 }
