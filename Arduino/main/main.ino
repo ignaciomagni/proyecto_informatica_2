@@ -245,6 +245,7 @@ void setup() {
   rfid.PCD_Init();
   delay(100);
   enviarMensaje("LISTO=ESP32_DOMOTICA_V1");
+  enviarMensaje("INFO=Enviar USUARIOS=uid1,uid2 despues de inicio");
 }
 void loop() {
   leerComandoSerial();
