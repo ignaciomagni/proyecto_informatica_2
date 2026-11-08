@@ -1,3 +1,5 @@
+#include <SPI.h>
+#include <MFRC522.h>
 #include <DHT.h>
 #include <ESP32Servo.h>
 
@@ -5,6 +7,8 @@ const uint8_t PIN_LUZ_1 = 15;
 const uint8_t PIN_LUZ_2 = 16;
 const uint8_t PIN_LUZ_3 = 17;
 const uint8_t PIN_PUERTA = 14;
+const uint8_t PIN_RFID_SS = 5;
+const uint8_t PIN_RFID_RST = 22;
 const uint8_t PIN_LED_VERDE = 32;
 const uint8_t PIN_LED_AMARILLO = 33;
 const uint8_t PIN_LED_ROJO = 25;
@@ -17,9 +21,11 @@ const uint32_t VELOCIDAD_SERIAL = 115200;
 const uint32_t INTERVALO_DHT_MS = 2500;
 const uint32_t DEBOUNCE_MS = 40;
 const uint32_t DURACION_DESBLOQUEO_MS = 3500;
+const uint32_t RFID_COOLDOWN_MS = 1200;
 const int ANGULO_CIERRE_SERVO = 0;
 const int ANGULO_ABIERTO_SERVO = 90;
 
+MFRC522 rfid(PIN_RFID_SS, PIN_RFID_RST);
 DHT dht(PIN_DHT, DHT22);
 Servo cerradura;
 
@@ -27,6 +33,7 @@ bool luces[3] = {false, false, false};
 bool cerraduraAbierta = false;
 uint32_t desbloqueoEmpezo = 0;
 uint32_t ultimoDht = 0;
+uint32_t ultimoRfid = 0;
 uint32_t ultimaPuerta = 0;
 uint32_t ultimoBoton = 0;
 bool ultimaLecturaBoton = HIGH;
@@ -102,6 +109,25 @@ void leerComandoSerial() {
     }
   }
 }
+String leerUID() {
+  String uid;
+  for (byte i = 0; i < rfid.uid.size; i++) {
+    if (rfid.uid.uidByte[i] < 0x10) uid += '0';
+    uid += String(rfid.uid.uidByte[i], HEX);
+  }
+  uid.toUpperCase();
+  return uid;
+}
+void scanRFID() {
+  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) return;
+  const uint32_t ahora = millis();
+  String uid = leerUID();
+  rfid.PICC_HaltA();
+  rfid.PCD_StopCrypto1();
+  if (ahora - ultimoRfid < RFID_COOLDOWN_MS) return;
+  ultimoRfid = ahora;
+  enviarMensaje("TARJETA=" + uid);
+}
 void logicaBoton() {
   bool lectura = digitalRead(PIN_BOTON_INTERIOR);
   uint32_t ahora = millis();
@@ -159,12 +185,16 @@ void setup() {
   cerradura.attach(PIN_SERVO, 500, 2400);
   cerradura.write(ANGULO_CIERRE_SERVO);
   dht.begin();
+  SPI.begin();
+  rfid.PCD_Init();
+  delay(100);
   enviarMensaje("LISTO=ESP32_DOMOTICA_V1");
 }
 void loop() {
   leerComandoSerial();
   logicaBoton();
   logicaSensorPuerta();
+  scanRFID();
   logicaDHT();
   if (cerraduraAbierta && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
     bloquearPuerta();
