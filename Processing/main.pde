@@ -3,6 +3,7 @@ import processing.serial.*;
 Serial puerto;
 
 String estadoActual = "Conectando ESP...";
+HashMap<String, String> usuarios = new HashMap<String, String>();
 ArrayList <String> eventos;
 int scroll= 0;
 int c =0;
@@ -11,6 +12,7 @@ boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
 String puertaEstado = "DESCONOCIDA"; 
 String ultimaTarjeta = "--";
+String ultimoAcceso = "Sin eventos";
 boolean cerraduraEstado = false;
 
 void setup(){
@@ -29,6 +31,7 @@ void setup(){
   }else{
    println("No hay puertos disponibles") ;
   }
+  cargarUsuarios();
 }
 
 void draw() {
@@ -65,7 +68,9 @@ void draw() {
 
 
   dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
+  text("Tarjetas registradas: "+ usuarios.size(), width*0.2, height * 0.65);
   text("Ultima tarjeta: " + ultimaTarjeta, width*0.2,height*0.7);
+  text("Ultimo acceso: " + ultimoAcceso, width*0.2, height*0.75);
 }
 
 
@@ -147,7 +152,8 @@ void serialEvent(Serial puerto){
   }
   if(mensaje.startsWith("LISTO=")){
     estadoActual = "ESSP32 conectado";
-    enviarComando("ESTADO");
+    sincronizarUsuarios();
+    enviarComando("STATUS");
   }else if(mensaje.startsWith("AMB=")){
     String info = mensaje.substring(4);
     float t = Float.NaN;
@@ -191,11 +197,21 @@ void serialEvent(Serial puerto){
             }
          }
      }
+  }else if(mensaje.startsWith("ACCESO=CONSEDIDO")){
+    ultimoAcceso = "AUTORIZADO";
+    nuevoEvento("Acceso autorizado: " + mensaje);
+    estadoActual = "Acceso autorizado";
+  }else if(mensaje.startsWith("ACCESO=DENEGADO")){
+    ultimoAcceso = "DENEGADO";
+    nuevoEvento("Acceso autorizado: "+ mensaje);
+    estadoActual = "Acceso denegado";
   }else if(mensaje.startsWith("TARJETA=")){
     ultimaTarjeta = procesarTexto(mensaje);
   }else if(mensaje.startsWith("ERROR_DEL_SENSOR")){
     estadoActual = "Error leyendo DHT";
     nuevoEvento(estadoActual);
+  }else if(mensaje.startsWith("USUARIOS_SINCRONIZADOS=")){
+    estadoActual = "Usuarios sincronizados con ESP322: " + mensaje.substring(21);
   }else if (mensaje.startsWith("BOTON=")){
     nuevoEvento("Boton interior pulsado");
   }
@@ -216,6 +232,40 @@ void enviarComando(String comando){
    }
    texto = trim(texto).toUpperCase().replace(" ","").replace(":", "").replace("-","");
    return texto;
+ }
+ 
+ void sincronizarUsuarios(){
+   String csv = "";
+   for(String id:usuarios.keySet()){
+    if(csv.length()>0){
+      csv += ",";
+    }
+     csv += id;
+   }
+   if(csv.length()>0){
+     enviarComando("USUARIOS= "+ csv);
+   }
+ }
+ 
+ void cargarUsuarios(){
+   File archivo = new File(dataPath("usuarios.csv"));
+   if(!archivo.exists()){
+    return; 
+   }
+   String[] usuarioss = loadStrings("usuarios.csv");
+   if (usuarioss == null){
+    return; 
+   }
+   for(String usuario: usuarioss){
+     int coma = usuario.indexOf(',');
+     if(coma>0){
+      String id=procesarTexto(usuario.substring(0, coma));
+      String nombre = usuario.substring(coma+1);
+      if(id.length()>0 && nombre.length()>0){
+       usuarios.put(id, nombre); 
+      }
+     }
+   }
  }
  
  void nuevoEvento(String evento){
