@@ -10,6 +10,12 @@ int c =0;
 String sensorEstado = "Temperatura -- C Humedad: -- %";
 boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
+boolean botonRegistro = false;
+boolean botonCancelar = false;
+boolean registrando = false;
+boolean pedirNombre = false;
+String idPendiente = "";
+String nombre = "";
 String puertaEstado = "DESCONOCIDA"; 
 String ultimaTarjeta = "--";
 String ultimoAcceso = "Sin eventos";
@@ -63,11 +69,14 @@ void draw() {
   
   dibujarPanel(width*0.7, height*0.5, width * 0.35, height*0.3, "SENSOR AMBIENTAL");
   text(sensorEstado, width * 0.7, height * 0.625);
-  if(!mousePressed){actualizarEstado=false;}
+  if(!mousePressed){actualizarEstado=false; botonRegistro =false; botonCancelar=false;}
   dibujarBoton(width*0.7, height*0.5, width * 0.17, "Actualizar estado", actualizarEstado);
 
 
   dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
+  
+  dibujarBoton(width*0.13, height * 0.81, width * 0.1,"Registrar\n tarjeta", botonRegistro);
+   dibujarBoton(width*0.27, height * 0.81, width * 0.1,"Cancelar\n registro", botonCancelar);
   text("Tarjetas registradas: "+ usuarios.size(), width*0.2, height * 0.65);
   text("Ultima tarjeta: " + ultimaTarjeta, width*0.2,height*0.7);
   text("Ultimo acceso: " + ultimoAcceso, width*0.2, height*0.75);
@@ -140,8 +149,63 @@ void mousePressed(){
     enviarComando("ESTADO");
     actualizarEstado=true;
   }
+  if(dist(width*0.13, height * 0.81,mouseX,mouseY)<width*0.05){
+    if(pedirNombre){
+      estadoActual = "Termina o cancela el registro actual priemro";
+      return;
+    }
+    botonRegistro = true;
+    registrando = true;
+    enviarComando("REGISTRAR");
+    estadoActual = "Modo de registro activado: Acerca una tarjeta al lector";
+    nuevoEvento("Solicitud de registro RFID");
+  }
+  if(dist(width*0.27, height * 0.81,mouseX,mouseY)<width*0.05){
+    botonCancelar = true;
+    registrando = false;
+    pedirNombre = false;
+    idPendiente = "";
+    nombre = "";
+    enviarComando("CANCELAR_REGISTRO");
+    estadoActual = "Registro cancelado";
+    return;
+  }
 }
 
+void keyPressed(){
+ if(!pedirNombre){
+  return; 
+ }
+ if (key == ENTER || key == RETURN){
+  String usuario = nombre.trim();
+   if(usuario.length() == 0){
+    estadoActual = "Escribe un nombre antes de confirmar";
+    return;
+   }
+   usuarios.put(idPendiente, usuario);
+    guardarUsuarios();
+    sincronizarUsuarios();
+    nuevoEvento("Tarjeta registrada: "+ usuario+" [" +idPendiente + "]");
+    estadoActual="Tarjeta registrada correctamente";
+    pedirNombre = false;
+    registrando = false;
+    idPendiente = "";
+    nombre = "";
+ }else if(key == ESC){
+    key = 0;
+    pedirNombre = false;
+    registrando = false;
+    idPendiente = "";
+    nombre = "";
+    enviarComando("CANCELAR_REGISTRO");
+ }else if(key == BACKSPACE){
+   if(nombre.length()>0){
+     nombre = nombre.substring(0, nombre.length()-1);
+   }
+  }else if(key >=32 && key !=127 && nombre.length()<40){
+     nombre +=key;
+   }
+}
 void serialEvent(Serial puerto){
   String mensaje = puerto.readStringUntil('\n');
   mensaje = trim(mensaje);
@@ -154,6 +218,20 @@ void serialEvent(Serial puerto){
     estadoActual = "ESSP32 conectado";
     sincronizarUsuarios();
     enviarComando("STATUS");
+  }else if(mensaje.startsWith("UID_REGISTRO=")){
+    idPendiente = procesarTexto(mensaje.substring("UID_REGISTRO=".length()));
+    if(usuarios.containsKey(idPendiente)){
+        estadoActual = "Esta tarjeta ya esta registrada como " + usuarios.get(idPendiente);
+        nuevoEvento("Intentod e registrar UID ya existente: " + idPendiente);
+        pedirNombre = false;
+        registrando = false;
+        sincronizarUsuarios();
+    }else{
+       pedirNombre = true;
+       registrando = false;
+       nombre = "";
+       estadoActual="UID leido. Escribe el nombre y pulsa ENTER para guardar";
+    }
   }else if(mensaje.startsWith("AMB=")){
     String info = mensaje.substring(4);
     float t = Float.NaN;
@@ -207,6 +285,9 @@ void serialEvent(Serial puerto){
     estadoActual = "Acceso denegado";
   }else if(mensaje.startsWith("TARJETA=")){
     ultimaTarjeta = procesarTexto(mensaje);
+  }else if(mensaje.startsWith("REGISTRO=CANCELADO")){
+    registrando=false;
+    estadoActual="Tiempo de registro agotado";
   }else if(mensaje.startsWith("ERROR_DEL_SENSOR")){
     estadoActual = "Error leyendo DHT";
     nuevoEvento(estadoActual);
@@ -214,6 +295,8 @@ void serialEvent(Serial puerto){
     estadoActual = "Usuarios sincronizados con ESP322: " + mensaje.substring(21);
   }else if (mensaje.startsWith("BOTON=")){
     nuevoEvento("Boton interior pulsado");
+  }else if(mensaje.startsWith("REGISTRO=LISTO")){
+   estadoActual="Modo de registro: acerca una tarjeta al lector RFID"; 
   }
 }
 
@@ -265,6 +348,14 @@ void enviarComando(String comando){
        usuarios.put(id, nombre); 
       }
      }
+   }
+ }
+ 
+ void guardarUsuarios(){
+   ArrayList<String> mensajes = new ArrayList<String>();
+   for(String id: usuarios.keySet()){
+    mensajes.add(id + "," + usuarios.get(id).replace(","," "));
+    saveStrings("usuarios.csv", mensajes.toArray(new String[0]));
    }
  }
  
