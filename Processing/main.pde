@@ -6,38 +6,35 @@ String estadoActual = "Conectando ESP...";
 HashMap<String, String> usuarios = new HashMap<String, String>();
 ArrayList <String> eventos;
 int scroll= 0;
-int c =0;
 String sensorEstado = "Temperatura -- C Humedad: -- %";
 boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
+String puertaEstado = "DESCONOCIDA"; 
 boolean botonRegistro = false;
 boolean botonCancelar = false;
 boolean registrando = false;
 boolean pedirNombre = false;
 String idPendiente = "";
 String nombre = "";
-String puertaEstado = "DESCONOCIDA"; 
 String ultimaTarjeta = "--";
 String ultimoAcceso = "Sin eventos";
 boolean cerraduraEstado = false;
+String puertoDeseado = "COM3";
+int ultimoIntentoConexion;
+int intervaloReconexion = 2000;
 
 void setup(){
   
   size(600,600);
   eventos = new ArrayList<String>();
-  for(int i = 0; i<10; i++){
-    eventos.add("Evento de ejemplo"+ i);
-  }
-  String puertos[] = Serial.list();
-  print("Puertos disponibles: ");
-  println();
-  printArray(puertos);
-  if(puertos.length > 0){
-    puerto = new Serial(this, puertos[0], 115200);
-  }else{
-   println("No hay puertos disponibles") ;
-  }
+  //for(int i = 0; i<10; i++){
+   // eventos.add("Evento de ejemplo"+ i);
+  //}
+  
+  conectarPuerto();
   cargarUsuarios();
+  
+  textFont(createFont("SansSerif", 25));
 }
 
 void draw() {
@@ -46,16 +43,21 @@ void draw() {
   textAlign(CENTER);
   rectMode(CENTER);
   textSize(15);
-  textFont(createFont("SansSerif", 25));
   text("Panel de control", width*0.5, height*0.05);
   textSize(16);
   text(estadoActual,  width*0.5, height*0.1);
   dibujarPanel(width*0.2, height*0.3, width * 0.3, height * 0.35, "Eventos recientes: " );
-  for(int i=scroll ; i<7+min(scroll,eventos.size()-scroll);i++){;
-    text(eventos.get(i), width*0.2, height*0.3-40+20*(i-scroll)); 
+  if(eventos.size()!=0){
+    for(int i=scroll ; i<min(eventos.size(), scroll + 7);i++){;
+      text(eventos.get(i), width*0.2, height*0.3-40+20*(i-scroll)); 
+    }
   }
-  
   dibujarPanel(width*0.70, height*0.215, width*0.5, height*0.175, "Control de luces");
+  
+  if(puerto == null && millis() - ultimoIntentoConexion >= intervaloReconexion) {
+  ultimoIntentoConexion = millis();
+  conectarPuerto();
+  }
   
   for(int i=0; i<3; i++){
     dibujarBoton(width*(0.70-(i-1)*0.16), height*0.215, width*0.1, "Led "+(-i-1+3), lucesEstado[i]);
@@ -74,7 +76,6 @@ void draw() {
 
 
   dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
-  
   dibujarBoton(width*0.13, height * 0.81, width * 0.1,"Registrar\n tarjeta", botonRegistro);
    dibujarBoton(width*0.27, height * 0.81, width * 0.1,"Cancelar\n registro", botonCancelar);
   text("Tarjetas registradas: "+ usuarios.size(), width*0.2, height * 0.65);
@@ -82,6 +83,40 @@ void draw() {
   text("Ultimo acceso: " + ultimoAcceso, width*0.2, height*0.75);
 }
 
+void conectarPuerto(){
+
+  String[] puertos = Serial.list();
+
+  println("Puertos disponibles:");
+  printArray(puertos);
+
+  for(int i = 0; i < puertos.length; i++){
+
+    if(puertos[i].equals(puertoDeseado)){
+
+      try{
+        puerto = new Serial(this, puertos[i], 115200);
+        puerto.bufferUntil('\n');
+
+        estadoActual = "Conectando ESP32...";
+        println("Intentando conectar con " + puertos[i]);
+
+        return;
+
+      }catch(RuntimeException e){
+
+        puerto = null;
+        estadoActual = "Puerto ocupado o inaccesible";
+        println("Error al abrir puerto: " + e.getMessage());
+
+        return;
+      }
+    }
+  }
+
+  puerto = null;
+  estadoActual = "Esperando ESP32...";
+}
 
 void dibujarPanel(float x, float y, float ancho, float alto, String informacion){
   stroke(255,255,255);
@@ -127,8 +162,8 @@ void mouseWheel(processing.event.MouseEvent event){
 void mousePressed(){
   for(int i = 0; i<3;i++){
    if(dist(width*(0.70-(i-1)*0.16), height*0.215, mouseX, mouseY)<width*0.05) {
-     lucesEstado[i]=!lucesEstado[i]; 
-     if(lucesEstado[i]){
+     boolean nuevoEstado=!lucesEstado[i]; 
+     if(nuevoEstado){
        enviarComando("LUZ"+(i+1)+"="+"ENCENDIDA");
      }else{
        enviarComando("LUZ"+(i+1)+"="+"APAGADA");
@@ -139,11 +174,10 @@ void mousePressed(){
   
   if(dist(width*0.6, height*0.7875, mouseX, mouseY)<width*0.05){
     enviarComando("CERRAR");
-    cerraduraEstado = false;
+ 
   }
   if(dist(width*0.8, height*0.7875, mouseX, mouseY)<width*0.05){
     enviarComando("ABRIR");
-    cerraduraEstado = true;
   }
   if(dist(width*0.7, height*0.5,mouseX,mouseY)<width*0.085){
     enviarComando("ESTADO");
@@ -151,7 +185,7 @@ void mousePressed(){
   }
   if(dist(width*0.13, height * 0.81,mouseX,mouseY)<width*0.05){
     if(pedirNombre){
-      estadoActual = "Termina o cancela el registro actual priemro";
+      estadoActual = "Termina o cancela el registro actual primero";
       return;
     }
     botonRegistro = true;
@@ -206,23 +240,30 @@ void keyPressed(){
      nombre +=key;
    }
 }
+
 void serialEvent(Serial puerto){
   String mensaje = puerto.readStringUntil('\n');
-  mensaje = trim(mensaje);
-  if(mensaje != null){
-    println("Mensaje recibido: ", mensaje);
-  }else{
-   return; 
+  
+  if(mensaje == null){
+    return;
   }
+  mensaje = trim(mensaje);
+  
+  if(mensaje.length() == 0){
+    return;
+  }
+
+  println("Mensaje recibido: " + mensaje);
+  
   if(mensaje.startsWith("LISTO=")){
-    estadoActual = "ESSP32 conectado";
+    estadoActual = "ESP32 conectado";
     sincronizarUsuarios();
-    enviarComando("STATUS");
+    enviarComando("ESTADO");
   }else if(mensaje.startsWith("UID_REGISTRO=")){
     idPendiente = procesarTexto(mensaje.substring("UID_REGISTRO=".length()));
     if(usuarios.containsKey(idPendiente)){
         estadoActual = "Esta tarjeta ya esta registrada como " + usuarios.get(idPendiente);
-        nuevoEvento("Intentod e registrar UID ya existente: " + idPendiente);
+        nuevoEvento("Intento de registrar UID ya existente: " + idPendiente);
         pedirNombre = false;
         registrando = false;
         sincronizarUsuarios();
@@ -256,7 +297,8 @@ void serialEvent(Serial puerto){
       }
       nuevoEvento("Puerta " + puertaEstado.toLowerCase());
   } else if(mensaje.startsWith("CERRADURA=ABIERTA,RAZON=")){
-    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("RAZON=")+7));
+    cerraduraEstado = true;
+    nuevoEvento("Cerradura desbloqueada: " + mensaje.substring(mensaje.indexOf("RAZON=")+6));
   }else if (mensaje.startsWith("CERRADURA=")){
     cerraduraEstado = mensaje.contains("ABIERTA");
   }else if(mensaje.startsWith("ERROR=")){
@@ -281,23 +323,23 @@ void serialEvent(Serial puerto){
     estadoActual = "Acceso autorizado";
   }else if(mensaje.startsWith("ACCESO=DENEGADO")){
     ultimoAcceso = "DENEGADO";
-    nuevoEvento("Acceso autorizado: "+ mensaje);
+    nuevoEvento("Acceso denegado: "+ mensaje);
     estadoActual = "Acceso denegado";
   }else if(mensaje.startsWith("TARJETA=")){
-    ultimaTarjeta = procesarTexto(mensaje);
-  }else if(mensaje.startsWith("REGISTRO=CANCELADO")){
+    ultimaTarjeta = procesarTexto(mensaje.substring("TARJETA=".length()));
+  } else if(mensaje.startsWith("REGISTRO=TIEMPO_TERMINADO")){
     registrando=false;
     estadoActual="Tiempo de registro agotado";
-  }else if(mensaje.startsWith("ERROR_DEL_SENSOR")){
+  }else if(mensaje.startsWith("ERROR_DE_SENSOR")){
     estadoActual = "Error leyendo DHT";
     nuevoEvento(estadoActual);
   }else if(mensaje.startsWith("USUARIOS_SINCRONIZADOS=")){
-    estadoActual = "Usuarios sincronizados con ESP322: " + mensaje.substring(21);
+    estadoActual = "Usuarios sincronizados con ESP32: " + mensaje.substring("USUARIOS_SINCRONIZADOS=".length());
   }else if (mensaje.startsWith("BOTON=")){
     nuevoEvento("Boton interior pulsado");
   }else if(mensaje.startsWith("REGISTRO=LISTO")){
    estadoActual="Modo de registro: acerca una tarjeta al lector RFID"; 
-  }
+   }
 }
 
 void enviarComando(String comando){
@@ -309,7 +351,16 @@ void enviarComando(String comando){
  println("Comando enviado: " + comando);
  }
  
- String procesarTexto(String texto){
+void guardarUsuarios(){
+ ArrayList<String> mensajes = new ArrayList<String>();
+ for(String id: usuarios.keySet()){
+   mensajes.add(id + "," + usuarios.get(id).replace(","," "));
+   }
+   saveStrings("usuarios.csv", mensajes.toArray(new String[0]));
+ }
+ 
+ 
+String procesarTexto(String texto){
    if(texto == null){
     return ""; 
    }
@@ -326,7 +377,7 @@ void enviarComando(String comando){
      csv += id;
    }
    if(csv.length()>0){
-     enviarComando("USUARIOS= "+ csv);
+     enviarComando("USUARIOS="+ csv);
    }
  }
  
@@ -348,14 +399,6 @@ void enviarComando(String comando){
        usuarios.put(id, nombre); 
       }
      }
-   }
- }
- 
- void guardarUsuarios(){
-   ArrayList<String> mensajes = new ArrayList<String>();
-   for(String id: usuarios.keySet()){
-    mensajes.add(id + "," + usuarios.get(id).replace(","," "));
-    saveStrings("usuarios.csv", mensajes.toArray(new String[0]));
    }
  }
  
