@@ -27,9 +27,9 @@ void setup(){
   
   size(600,600);
   eventos = new ArrayList<String>();
-  //for(int i = 0; i<10; i++){
-   // eventos.add("Evento de ejemplo"+ i);
-  //}
+  for(int i = 0; i<10; i++){
+    eventos.add("Evento de ejemplo"+ i);
+  }
   
   conectarPuerto();
   cargarUsuarios();
@@ -78,10 +78,13 @@ void draw() {
 
   dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
   dibujarBoton(width*0.13, height * 0.81, width * 0.1,"Registrar\n tarjeta", botonRegistro);
-   dibujarBoton(width*0.27, height * 0.81, width * 0.1,"Cancelar\n registro", botonCancelar);
+  dibujarBoton(width*0.27, height * 0.81, width * 0.1,"Cancelar\n registro", botonCancelar);
   text("Tarjetas registradas: "+ usuarios.size(), width*0.2, height * 0.65);
   text("Ultima tarjeta: " + ultimaTarjeta, width*0.2,height*0.7);
   text("Ultimo acceso: " + ultimoAcceso, width*0.2, height*0.75);
+  if(pedirNombre){
+    text("Nombre "+ idPendiente + ": " + nombre, width*0.5, height * 0.9);  
+ }    
 }
 
 void conectarPuerto(){
