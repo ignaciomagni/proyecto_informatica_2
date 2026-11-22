@@ -33,6 +33,7 @@ void setup(){
   
   conectarPuerto();
   cargarUsuarios();
+  cargarEventos();
   
   textFont(createFont("SansSerif", 25));
 }
@@ -402,22 +403,30 @@ String procesarTexto(String texto){
    }
  }
  
+void cargarEventos(){
+ File archivo = new File(dataPath("eventos.csv"));
+ if(!archivo.exists()){
+   return;
+  }
+ String[] eventosCarga = loadStrings("eventos.csv");
+ if(eventosCarga == null){
+    return; 
+  } 
+  for(String eventoActual : eventosCarga){
+    if(eventoActual != null && trim(eventoActual).length()>0) {
+      eventos.add(eventoActual);
+    }   
+  }
+  while(eventos.size()>100){
+    eventos.remove(0);
+   }
+ }
  void nuevoEvento(String evento){
    String fecha = nf(day(), 2) + "/" + nf(month(), 2) + "-" + year();
    String registro = fecha +" "+ evento;
    eventos.add(registro);
-   if(eventos.size() > 300){
+   if(eventos.size() > 100){
     eventos.remove(0); 
    }
-   String[] eventosTotal = loadStrings("eventos.csv");
-   
-   if(eventosTotal == null){
-    eventosTotal = new String[0]; 
-   }
-   
-   eventosTotal = append(eventosTotal, registro);
-   if(eventosTotal.length > 100){
-    eventosTotal = shorten(eventosTotal); 
-   }
-   saveStrings("eventos.csv", eventosTotal);
+   saveStrings("eventos.csv", eventos.toArray(new String[0]));
 }
