@@ -23,6 +23,9 @@ const uint32_t DEBOUNCE_MS = 40;
 const uint32_t DURACION_DESBLOQUEO_MS = 3500;
 const uint32_t DURACION_REGISTRO_MS = 30000;
 const uint32_t RFID_COOLDOWN_MS = 1200;
+const uint32_t LEDS_ESTADOS_MS = 2000;
+const size_t USUARIOS_MAX = 100;
+const size_t LINEA_SERIAL_MAX = 2200;
 const int ANGULO_CIERRE_SERVO = 0;
 const int ANGULO_ABIERTO_SERVO = 90;
 
@@ -34,7 +37,7 @@ bool luces[3] = {false, false, false};
 bool modoRegistro = false;
 bool cerraduraAbierta = false;
 bool usuariosConocidos = false;
-String uidsAutorizadas[100];
+String uidsAutorizadas[USUARIOS_MAX];
 size_t cantidadAutorizadas = 0;
 uint32_t registroEmpezo = 0;
 uint32_t desbloqueoEmpezo = 0;
@@ -47,17 +50,31 @@ bool estadoBoton = HIGH;
 bool ultimoEstadoPuerta = HIGH;
 bool estadoPuerta = HIGH;
 String lineaComando;
+bool serialOverflow = false;
+bool autoApagarLeds = false;
+uint32_t ledsPrendidos = 0;
 
 void enviarMensaje(const String &mensaje) {
   Serial.println(mensaje);
 }
-void cambiarEstadoLeds(bool verde, bool amarillo, bool rojo) {
+void cambiarLeds(bool verde, bool amarillo, bool rojo, bool autoOff) {
   digitalWrite(PIN_LED_VERDE, verde ? HIGH : LOW);
   digitalWrite(PIN_LED_AMARILLO, amarillo ? HIGH : LOW);
   digitalWrite(PIN_LED_ROJO, rojo ? HIGH : LOW);
+  autoApagarLeds = autoOff && (verde || amarillo || rojo);
+  ledsPrendidos = millis();
+}
+void cambiarEstadoLeds(bool verde, bool amarillo, bool rojo) {
+  cambiarLeds(verde, amarillo, rojo, true);
+}
+void mantenerEstadoLeds(bool verde, bool amarillo, bool rojo) {
+  cambiarLeds(verde, amarillo, rojo, false);
 }
 void beep(uint16_t frecuencia, uint16_t duracion) {
   tone(PIN_BUZZER, frecuencia, duracion);
+}
+void actualizarEstadoLeds() {
+  if (autoApagarLeds && millis() - ledsPrendidos >= LEDS_ESTADOS_MS) cambiarEstadoLeds(false, false, false);
 }
 String normalizarUID(String uid) {
   uid.trim();
@@ -70,13 +87,14 @@ String normalizarUID(String uid) {
 void bloquearPuerta() {
   cerradura.write(ANGULO_CIERRE_SERVO);
   cerraduraAbierta = false;
+  if (!modoRegistro) cambiarEstadoLeds(false, false, false);
   enviarMensaje("CERRADURA=CERRADA");
 }
 void desbloquearPuerta(const String &razon) {
   cerradura.write(ANGULO_ABIERTO_SERVO);
   cerraduraAbierta = true;
   desbloqueoEmpezo = millis();
-  cambiarEstadoLeds(true, false, false);
+  mantenerEstadoLeds(true, false, false);
   beep(1800, 100);
   enviarMensaje("CERRADURA=ABIERTA,RAZON=" + razon);
 }
@@ -92,7 +110,7 @@ void agregarUidAutorizada(String uid) {
   for (size_t i = 0; i < cantidadAutorizadas; ++i) {
     if (uidsAutorizadas[i] == uid) return;
   }
-  if (cantidadAutorizadas < 100) uidsAutorizadas[cantidadAutorizadas++] = uid;
+  if (cantidadAutorizadas < USUARIOS_MAX) uidsAutorizadas[cantidadAutorizadas++] = uid;
 }
 void reemplazarUsuarios(String csv) {
   cantidadAutorizadas = 0;
@@ -132,7 +150,7 @@ void recibirComando(String linea) {
   else if (comando == "REGISTRAR") {
     modoRegistro = true;
     registroEmpezo = millis();
-    cambiarEstadoLeds(false, true, false);
+    mantenerEstadoLeds(false, true, false);
     enviarMensaje("REGISTRO=LISTO");
   } else if (comando == "CANCELAR_REGISTRO") {
     modoRegistro = false;
@@ -155,12 +173,14 @@ void leerComandoSerial() {
   while (Serial.available()) {
     char c = (char)Serial.read();
     if (c == '\n') {
-      recibirComando(lineaComando);
+      if (serialOverflow) enviarMensaje("ERROR=LINEA_MUY_LARGA");
+      else recibirComando(lineaComando);
       lineaComando = "";
-    } else if (c != '\r' && lineaComando.length() < 512) {
+      serialOverflow = false;
+    } else if (c != '\r' && lineaComando.length() < LINEA_SERIAL_MAX) {
       lineaComando += c;
-    } else if (lineaComando.length() >= 512) {
-      lineaComando = "";
+    } else {
+      serialOverflow = true;
     }
   }
 }
@@ -235,14 +255,14 @@ void logicaDHT() {
   float humedad = dht.readHumidity();
   float temperatura = dht.readTemperature();
   if (isnan(humedad) || isnan(temperatura)) {
-    enviarMensaje("ERROR_DE_SENSOR=DHT22");
+    enviarMensaje("ERROR_DE_SENSOR=DHT11");
     return;
   }
   enviarMensaje("AMB=T:" + String(temperatura, 1) + ",H:" + String(humedad, 1));
 }
 void setup() {
   Serial.begin(VELOCIDAD_SERIAL);
-  lineaComando.reserve(512);
+  lineaComando.reserve(LINEA_SERIAL_MAX);
   pinMode(PIN_LUZ_1, OUTPUT);
   pinMode(PIN_LUZ_2, OUTPUT);
   pinMode(PIN_LUZ_3, OUTPUT);
@@ -272,7 +292,8 @@ void loop() {
   logicaSensorPuerta();
   scanRFID();
   logicaDHT();
-  if (cerraduraAbierta && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
+  actualizarEstadoLeds();
+  if (cerraduraAbierta && estadoPuerta == HIGH && millis() - desbloqueoEmpezo >= DURACION_DESBLOQUEO_MS) {
     bloquearPuerta();
   }
   if (modoRegistro && millis() - registroEmpezo >= DURACION_REGISTRO_MS) {
