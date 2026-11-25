@@ -449,12 +449,20 @@ void enviarComando(String comando){
  println("Comando enviado: " + comando);
  }
  
+void asegurarCarpetaData() {
+  File carpetaData = new File(dataPath(""));
+  if (!carpetaData.exists()) {
+    carpetaData.mkdirs();
+  }
+}
+ 
 void guardarUsuarios(){
  ArrayList<String> mensajes = new ArrayList<String>();
  for(String id: usuarios.keySet()){
    mensajes.add(id + "," + usuarios.get(id).replace(","," "));
    }
-   saveStrings("usuarios.csv", mensajes.toArray(new String[0]));
+   asegurarCarpetaData();
+   saveStrings(dataPath("usuarios.csv"), mensajes.toArray(new String[0]));
  }
  
  
@@ -484,7 +492,7 @@ String procesarTexto(String texto){
    if(!archivo.exists()){
     return; 
    }
-   String[] usuarioss = loadStrings("usuarios.csv");
+   String[] usuarioss = loadStrings(dataPath("usuarios.csv"));
    if (usuarioss == null){
     return; 
    }
@@ -501,11 +509,12 @@ String procesarTexto(String texto){
  }
  
 void cargarEventos(){
+ eventos.clear();
  File archivo = new File(dataPath("eventos.csv"));
  if(!archivo.exists()){
    return;
   }
- String[] eventosCarga = loadStrings("eventos.csv");
+ String[] eventosCarga = loadStrings(dataPath("eventos.csv"));
  if(eventosCarga == null){
     return; 
   } 
@@ -519,13 +528,14 @@ void cargarEventos(){
    }
  }
  void nuevoEvento(String evento){
+   asegurarCarpetaData();
    String fecha = nf(day(), 2) + "/" + nf(month(), 2) + "-" + year();
    String registro = fecha +" "+ evento;
    eventos.add(registro);
    if(eventos.size() > 100){
     eventos.remove(0); 
    }
-   saveStrings("eventos.csv", eventos.toArray(new String[0]));
+   saveStrings(dataPath("eventos.csv"), eventos.toArray(new String[0]));
 }
 
 void registrarMuestraRegresion(float tempC) {
