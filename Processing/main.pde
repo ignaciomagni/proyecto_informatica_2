@@ -2,11 +2,22 @@ import processing.serial.*;
 
 Serial puerto;
 
+final int MAX_MUESTRAS_REG = 10;
+float[] tiemposRegMin = new float[MAX_MUESTRAS_REG];
+float[] tempsRegC = new float[MAX_MUESTRAS_REG];
+int totalMuestrasReg = 0;
+int tiempoBaseMsReg = 0;
+boolean baseTiempoInicializada = false;
+
+float pendienteTemp = Float.NaN;    
+float ordenadaTemp = Float.NaN;     
+float tempProyectada5Min = Float.NaN; 
+
 String estadoActual = "Conectando ESP...";
 HashMap<String, String> usuarios = new HashMap<String, String>();
 ArrayList <String> eventos;
 int scroll= 0;
-String sensorEstado = "Temperatura -- C Humedad: -- %";
+String sensorEstado = "T-- C H: -- % Calculando tendencia...";
 boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
 String puertaEstado = "DESCONOCIDA"; 
@@ -291,7 +302,12 @@ void serialEvent(Serial puerto){
      }
     }
     if(!Float.isNaN(t) && !Float.isNaN(h)){
-      sensorEstado="Temperatura: "+ nf(t, 0, 1) + "C  Humedad: " + nf(h,0,1) + " %";
+      registrarMuestraRegresion(t);
+      if (!Float.isNaN(tempProyectada5Min)) {
+        sensorEstado="T: "+ nf(t, 0, 1) + "C  H: " + nf(h,0,1) + " %\n" + "Pend: " + nf(pendienteTemp, 0, 2) + "C/m  +5m: " + nf(tempProyectada5Min, 0, 1) + "C"; 
+      }else{
+        sensorEstado = "T: " + nf(t, 0, 1) + "C  H: " + nf(h, 0, 1) + "%\nCalculando tendencia...";
+      }
     }
   }else if(mensaje.startsWith("PUERTA=")){
       if(mensaje.substring(7).equals("ABIERTA")){
@@ -432,4 +448,79 @@ void cargarEventos(){
     eventos.remove(0); 
    }
    saveStrings("eventos.csv", eventos.toArray(new String[0]));
+}
+
+void registrarMuestraRegresion(float tempC) {
+  if (Float.isNaN(tempC)) {
+    return;
+  }
+
+  int ahoraMs = millis();
+  if (!baseTiempoInicializada) {
+    tiempoBaseMsReg = ahoraMs;
+    baseTiempoInicializada = true;
+  }
+
+  float tMin = (ahoraMs - tiempoBaseMsReg) / 60000.0;
+
+  if (totalMuestrasReg < MAX_MUESTRAS_REG) {
+    tiemposRegMin[totalMuestrasReg] = tMin;
+    tempsRegC[totalMuestrasReg] = tempC;
+    totalMuestrasReg++;
+  } else {
+    
+    for (int i = 0; i < MAX_MUESTRAS_REG - 1; i++) {
+      tiemposRegMin[i] = tiemposRegMin[i + 1];
+      tempsRegC[i] = tempsRegC[i + 1];
+    }
+    tiemposRegMin[MAX_MUESTRAS_REG - 1] = tMin;
+    tempsRegC[MAX_MUESTRAS_REG - 1] = tempC;
+  }
+
+  calcularRegresionLineal();
+}
+
+void calcularRegresionLineal() {
+  if (totalMuestrasReg < 2) {
+    pendienteTemp = Float.NaN;
+    ordenadaTemp = Float.NaN;
+    tempProyectada5Min = Float.NaN;
+    return;
+  }
+
+  float sumX = 0;
+  float sumY = 0;
+  float sumXY = 0;
+  float sumX2 = 0;
+
+  for (int i = 0; i < totalMuestrasReg; i++) {
+    float x = tiemposRegMin[i];
+    float y = tempsRegC[i];
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumX2 += x * x;
+  }
+
+  float n = totalMuestrasReg;
+  float denominador = n * sumX2 - sumX * sumX;
+
+
+  if (abs(denominador) < 1e-6) {
+    pendienteTemp = 0.0;
+    ordenadaTemp = sumY / n;
+  } else {
+    pendienteTemp = (n * sumXY - sumX * sumY) / denominador;
+    ordenadaTemp = (sumY - pendienteTemp * sumX) / n;
+  }
+
+  float tiempoActualMin = tiemposRegMin[totalMuestrasReg - 1];
+  tempProyectada5Min = predecirTemperatura(tiempoActualMin + 5.0);
+}
+
+float predecirTemperatura(float futuroMin) {
+  if (Float.isNaN(pendienteTemp) || Float.isNaN(ordenadaTemp)) {
+    return Float.NaN;
+  }
+  return pendienteTemp * futuroMin + ordenadaTemp;
 }
