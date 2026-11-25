@@ -18,11 +18,8 @@ HashMap<String, String> usuarios = new HashMap<String, String>();
 ArrayList <String> eventos;
 int scroll= 0;
 String sensorEstado = "T-- C H: -- % Calculando tendencia...";
-boolean actualizarEstado = false;
 boolean[] lucesEstado ={false, false, false};
 String puertaEstado = "DESCONOCIDA"; 
-boolean botonRegistro = false;
-boolean botonCancelar = false;
 boolean registrando = false;
 boolean pedirNombre = false;
 String idPendiente = "";
@@ -34,6 +31,67 @@ String puertoDeseado = "COM3";
 int ultimoIntentoConexion;
 int intervaloReconexion = 2000;
 
+Boton[] botonesLuces = new Boton[3];
+Boton btnAbrir;
+Boton btnCerrar;
+Boton btnActualizarEstado;
+Boton btnRegistrarTarjeta;
+Boton btnCancelarRegistro;
+
+class Boton {
+  float x;
+  float y;
+  float diametro;
+  String texto;
+  boolean activo;
+  
+  Boton(float x, float y, float diametro, String texto){
+    this.x = x;
+    this.y = y;
+    this.diametro = diametro;
+    this.texto = texto;
+    this.activo = false;
+  }
+  void setActivo(boolean activo){
+   this.activo=activo; 
+  }
+  boolean fueClicado(float mx, float my){
+   return dist(x,y,mx,my)<diametro * 0.5;
+  }
+  void dibujar(){
+    stroke(255,255,255);
+    textAlign(CENTER, CENTER);
+    textSize(13);
+    if(!activo){
+     fill(0,0,0);
+     circle( x + 4, y + 4, diametro);
+     circle(x, y, diametro);
+     fill(255,255,255);
+     text(texto,x,y);
+    }else{
+     fill(255,255,255);
+     circle(x, y, diametro);
+     fill(0,0,0);
+     text(texto,x+4,y+4);
+    }
+    fill(255,255,255);
+  }
+}
+
+void inicializarInterfaz(){
+ for(int i =0; i<3; i++){
+  float bx = width * (0.7 - (i-1) *0.16);
+  float by = height *0.215;
+  botonesLuces[i] = new Boton(bx, by, width * 0.1, "Led " + (-i - 1 + 3));
+ }
+
+  btnAbrir = new Boton(width * 0.8, height * 0.7875, width * 0.1, "Abrir");
+  btnCerrar = new Boton(width * 0.6, height * 0.7875, width * 0.1, "Cerrar");
+  btnActualizarEstado = new Boton(width * 0.7, height * 0.5, width * 0.17, "Actualizar estado");
+  btnRegistrarTarjeta = new Boton(width * 0.13, height * 0.81, width * 0.1, "Registrar\ntarjeta");
+  btnCancelarRegistro = new Boton(width * 0.27, height * 0.81, width * 0.1, "Cancelar\nregistro");
+}
+
 void setup(){
   
   size(600,600);
@@ -42,6 +100,7 @@ void setup(){
     eventos.add("Evento de ejemplo"+ i);
   }
   
+  inicializarInterfaz();
   conectarPuerto();
   cargarUsuarios();
   cargarEventos();
@@ -71,25 +130,31 @@ void draw() {
   conectarPuerto();
   }
   
-  for(int i=0; i<3; i++){
-    dibujarBoton(width*(0.70-(i-1)*0.16), height*0.215, width*0.1, "Led "+(-i-1+3), lucesEstado[i]);
+ for (int i = 0; i < 3; i++) {
+    botonesLuces[i].setActivo(lucesEstado[i]);
+    botonesLuces[i].dibujar();
   }
   
-    dibujarPanel(width*0.70, height*0.7875, width*0.5, height*0.175, "Control de cerradura");
-    dibujarBoton(width*0.8, height*0.7875, width*0.1, "Abrir",cerraduraEstado);
-    dibujarBoton(width*0.6, height*0.7875, width*0.1, "Cerrar",!cerraduraEstado);
-    
-    text("Puerta: " + puertaEstado, width*0.7, height*0.870);
+  dibujarPanel(width*0.70, height*0.7875, width*0.5, height*0.175, "Control de cerradura");
+  btnAbrir.setActivo(cerraduraEstado);
+  btnCerrar.setActivo(!cerraduraEstado);
+  btnAbrir.dibujar();
+  btnCerrar.dibujar();
+  textSize(13);
+  text("Puerta: " + puertaEstado, width*0.7, height*0.870);
   
   dibujarPanel(width*0.7, height*0.5, width * 0.35, height*0.3, "SENSOR AMBIENTAL");
   text(sensorEstado, width * 0.7, height * 0.625);
-  if(!mousePressed){actualizarEstado=false; botonRegistro =false; botonCancelar=false;}
-  dibujarBoton(width*0.7, height*0.5, width * 0.17, "Actualizar estado", actualizarEstado);
-
+  if (!mousePressed) {
+     btnActualizarEstado.setActivo(false);
+     btnRegistrarTarjeta.setActivo(false);
+     btnCancelarRegistro.setActivo(false);
+   }
+   btnActualizarEstado.dibujar();
 
   dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
-  dibujarBoton(width*0.13, height * 0.81, width * 0.1,"Registrar\n tarjeta", botonRegistro);
-  dibujarBoton(width*0.27, height * 0.81, width * 0.1,"Cancelar\n registro", botonCancelar);
+  btnRegistrarTarjeta.dibujar();
+  btnCancelarRegistro.dibujar();
   text("Tarjetas registradas: "+ usuarios.size(), width*0.2, height * 0.65);
   text("Ultima tarjeta: " + ultimaTarjeta, width*0.2,height*0.7);
   text("Ultimo acceso: " + ultimoAcceso, width*0.2, height*0.75);
@@ -142,26 +207,6 @@ void dibujarPanel(float x, float y, float ancho, float alto, String informacion)
   textAlign(CENTER);
   text(informacion, x,  y - alto *0.4);
 }
-void dibujarBoton(float x, float y, float diametro, String informacion, boolean estado){
- stroke(255,255,255);
- if(!estado){
- fill(0,0,0);
- circle(x+4, y+4, diametro);
- circle(x, y, diametro);
- textAlign(CENTER);
- fill(255,255,255);
- textSize(13);
- text(informacion, x, y);
- }else{
- fill(255,255,255);
- circle(x+4, y+4, diametro);
- textAlign(CENTER);
- fill(0,0,0);
- textSize(13);
- text(informacion, x+4, y+4);
- }
- fill(255,255,255);
-}
 
 void mouseWheel(processing.event.MouseEvent event){
   
@@ -176,7 +221,7 @@ void mouseWheel(processing.event.MouseEvent event){
 
 void mousePressed(){
   for(int i = 0; i<3;i++){
-   if(dist(width*(0.70-(i-1)*0.16), height*0.215, mouseX, mouseY)<width*0.05) {
+   if(botonesLuces[i].fueClicado(mouseX, mouseY)) {
      boolean nuevoEstado=!lucesEstado[i]; 
      if(nuevoEstado){
        enviarComando("LUZ"+(i+1)+"="+"ENCENDIDA");
@@ -187,30 +232,30 @@ void mousePressed(){
    }
   }
   
-  if(dist(width*0.6, height*0.7875, mouseX, mouseY)<width*0.05){
+  if(btnCerrar.fueClicado(mouseX, mouseY)){
     enviarComando("CERRAR");
  
   }
-  if(dist(width*0.8, height*0.7875, mouseX, mouseY)<width*0.05){
+  if(btnAbrir.fueClicado(mouseX, mouseY)){
     enviarComando("ABRIR");
   }
-  if(dist(width*0.7, height*0.5,mouseX,mouseY)<width*0.085){
+  if(btnActualizarEstado.fueClicado(mouseX, mouseY)){
     enviarComando("ESTADO");
-    actualizarEstado=true;
+    btnActualizarEstado.setActivo(true);
   }
-  if(dist(width*0.13, height * 0.81,mouseX,mouseY)<width*0.05){
+  if(btnRegistrarTarjeta.fueClicado(mouseX, mouseY)){
     if(pedirNombre){
       estadoActual = "Termina o cancela el registro actual primero";
       return;
     }
-    botonRegistro = true;
+    btnRegistrarTarjeta.setActivo(true);
     registrando = true;
     enviarComando("REGISTRAR");
     estadoActual = "Modo de registro activado: Acerca una tarjeta al lector";
     nuevoEvento("Solicitud de registro RFID");
   }
-  if(dist(width*0.27, height * 0.81,mouseX,mouseY)<width*0.05){
-    botonCancelar = true;
+  if(btnCancelarRegistro.fueClicado(mouseX, mouseY)){
+    btnCancelarRegistro.setActivo(true);
     registrando = false;
     pedirNombre = false;
     idPendiente = "";
@@ -333,7 +378,7 @@ void serialEvent(Serial puerto){
             if(orden.equals("ENCENDIDA")){
              lucesEstado[boton] = true; 
             }else if(orden.equals("APAGADA")){
-               lucesEstado[boton] = false; 
+              lucesEstado[boton] = false; 
             }
          }
      }
