@@ -31,6 +31,12 @@ String puertoDeseado = "COM3";
 int ultimoIntentoConexion;
 int intervaloReconexion = 2000;
 
+Panel panelEventos;
+Panel panelLuces;
+Panel panelCerradura;
+Panel panelSensor;
+Panel panelRfid;
+
 Boton[] botonesLuces = new Boton[3];
 Boton btnAbrir;
 Boton btnCerrar;
@@ -78,7 +84,43 @@ class Boton {
   }
 }
 
+class Panel {
+ float x;
+ float y;
+ float ancho;
+ float alto;
+ String titulo;
+ 
+ Panel(float x, float y, float ancho, float alto, String titulo){
+   this.x = x;
+   this.y = y;
+   this.ancho = ancho;
+   this.alto = alto;
+   this.titulo = titulo;
+ }
+ 
+ void dibujar(){
+  textAlign(CENTER, CENTER);
+  stroke(255,255,255);
+  fill(0,0,0);
+  rect(x,y,ancho,alto,20);
+  
+  fill(255,255,255);
+  textSize(13);
+  textAlign(CENTER,CENTER);
+  text(titulo, x, y-alto*0.4);
+  
+  
+ }
+}
+
 void inicializarInterfaz(){
+  panelEventos = new Panel(width * 0.2, height * 0.3, width * 0.3, height * 0.35, "Eventos recientes:");
+  panelLuces = new Panel(width * 0.70, height * 0.215, width * 0.5, height * 0.175, "Control de luces");
+  panelCerradura = new Panel(width * 0.70, height * 0.7875, width * 0.5, height * 0.175, "Control de cerradura");
+  panelSensor = new Panel(width * 0.7, height * 0.5, width * 0.35, height * 0.3, "SENSOR AMBIENTAL");
+  panelRfid = new Panel(width * 0.2, height * 0.7, width * 0.3, height * 0.35, "USUARIOS RFID");
+  
  for(int i =0; i<3; i++){
   float bx = width * (0.7 - (i-1) *0.16);
   float by = height *0.215;
@@ -117,34 +159,35 @@ void draw() {
   text("Panel de control", width*0.5, height*0.05);
   textSize(16);
   text(estadoActual,  width*0.5, height*0.1);
-  dibujarPanel(width*0.2, height*0.3, width * 0.3, height * 0.35, "Eventos recientes: " );
-  if(eventos.size()!=0){
-    for(int i=scroll ; i<min(eventos.size(), scroll + 7);i++){;
-      text(eventos.get(i), width*0.2, height*0.3-40+20*(i-scroll)); 
+  panelEventos.dibujar();
+  if (eventos.size() != 0) {
+    int maxScroll = max(0, eventos.size() - 7);
+    scroll = constrain(scroll, 0, maxScroll);
+    for (int i = scroll; i < min(eventos.size(), scroll + 7); i++) {
+      text(eventos.get(i), width * 0.2, height * 0.3 - 40 + 20 * (i - scroll));
     }
   }
-  dibujarPanel(width*0.70, height*0.215, width*0.5, height*0.175, "Control de luces");
   
   if(puerto == null && millis() - ultimoIntentoConexion >= intervaloReconexion) {
   ultimoIntentoConexion = millis();
   conectarPuerto();
   }
-  
+ panelLuces.dibujar();
  for (int i = 0; i < 3; i++) {
     botonesLuces[i].setActivo(lucesEstado[i]);
     botonesLuces[i].dibujar();
   }
   
-  dibujarPanel(width*0.70, height*0.7875, width*0.5, height*0.175, "Control de cerradura");
-  btnAbrir.setActivo(cerraduraEstado);
-  btnCerrar.setActivo(!cerraduraEstado);
-  btnAbrir.dibujar();
-  btnCerrar.dibujar();
-  textSize(13);
-  text("Puerta: " + puertaEstado, width*0.7, height*0.870);
-  
-  dibujarPanel(width*0.7, height*0.5, width * 0.35, height*0.3, "SENSOR AMBIENTAL");
-  text(sensorEstado, width * 0.7, height * 0.625);
+ panelCerradura.dibujar();
+ btnAbrir.setActivo(cerraduraEstado);
+ btnCerrar.setActivo(!cerraduraEstado);
+ btnAbrir.dibujar();
+ btnCerrar.dibujar();
+ textSize(13);
+ text("Puerta: " + puertaEstado, width*0.7, height*0.870);
+ 
+ panelSensor.dibujar();
+ text(sensorEstado, width * 0.7, height * 0.625);
   if (!mousePressed) {
      btnActualizarEstado.setActivo(false);
      btnRegistrarTarjeta.setActivo(false);
@@ -152,7 +195,7 @@ void draw() {
    }
    btnActualizarEstado.dibujar();
 
-  dibujarPanel(width*0.2, height*0.7, width * 0.3, height * 0.35, "USUARIOS RFID " );
+  panelRfid.dibujar(); 
   btnRegistrarTarjeta.dibujar();
   btnCancelarRegistro.dibujar();
   text("Tarjetas registradas: "+ usuarios.size(), width*0.2, height * 0.65);
@@ -196,16 +239,6 @@ void conectarPuerto(){
 
   puerto = null;
   estadoActual = "Esperando ESP32...";
-}
-
-void dibujarPanel(float x, float y, float ancho, float alto, String informacion){
-  stroke(255,255,255);
-  fill(0,0,0);
-  rect(x, y, ancho, alto, 20);
-  fill(255,255,255);
-  textSize(13);
-  textAlign(CENTER);
-  text(informacion, x,  y - alto *0.4);
 }
 
 void mouseWheel(processing.event.MouseEvent event){
